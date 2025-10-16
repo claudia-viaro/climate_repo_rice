@@ -1,0 +1,35 @@
+name: rice_exp
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Core Python setup
+  - python=3.11
+  - pip
+  - ipykernel
+  - numpy
+  - pyyaml
+  - psutil
+  - matplotlib
+  - tqdm
+  - pandas
+
+  # RL & ML stack
+  - pytorch
+  - torchvision
+  #- cpuonly  # ✅ change/remove this on GPU cluster if available
+  - gymnasium
+
+  # Optional debugging & tooling
+  - rich
+  - jupyterlab
+
+  # Install via pip if not available as conda packages
+  - pip:
+      - ray[rllib]==2.9.0
+      - opencensus
+      - cloudpickle
+      - filelock
+      - setuptools==68.2.2
+      - wheel

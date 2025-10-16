@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Conda
+env/
+.conda/
+venv*/
+*.egg-info
+
+# Ray / Torch outputs
+outputs
+
+
+# OS
+.DS_Store
+Thumbs.db
