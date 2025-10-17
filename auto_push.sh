@@ -1,5 +1,9 @@
 #!/bin/bash
-# auto_push.sh
+
+
+##### 
+# command to run:
+# ./auto_push.sh
 
 # Go to your repo
 cd ~/RICE-N-exp || exit
