@@ -1,13 +1,20 @@
 #!/bin/bash
+
+
+############################## code to run on powershell
+# ssh cluster.lip6.fr
+# enter the password twice 
+# cd ~/climate_repo_rice
+# chmod +x run_cluster.sh (actually to be done once only)
 # run_cluster.sh
 
 # 1. Go to home directory (or wherever you keep repos)
-cd ~/RICE-N-exp || exit
+cd ~/climate_repo_rice || exit
 # 2. Update repo
 if [ -d ".git" ]; then
     echo "Repo exists, pulling latest changes..."
-    git reset --hard HEAD         # optional: discard local changes
-    git pull origin main          # adjust if your branch is 'master' instead of 'main'
+    git reset --hard HEAD
+    git pull origin main
 else
     echo "Cloning repo fresh..."
     git clone https://github.com/claudia-viaro/climate_repo_rice.git .
