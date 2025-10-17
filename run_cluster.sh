@@ -28,7 +28,6 @@ fi
 # -------------------------
 # Activate Python environment
 # -------------------------
-# Adjust path: your Miniconda is in ~/miniconda (parent directory)
 source ~/miniconda/etc/profile.d/conda.sh
 conda activate rice_env || { echo "Failed to activate conda environment"; exit 1; }
 
@@ -38,7 +37,30 @@ conda activate rice_env || { echo "Failed to activate conda environment"; exit 1
 LOGFILE=~/climate_repo_rice/run_$(date +%Y%m%d_%H%M%S).log
 echo "Logging to $LOGFILE"
 nohup python scripts/trainer.py > "$LOGFILE" 2>&1 &
-
-echo "Training started. You can safely close the SSH session."
+TRAIN_PID=$!
+echo "Training started with PID $TRAIN_PID. You can safely close the SSH session."
 echo "Check log in real-time with: tail -f $LOGFILE"
 
+# -------------------------
+# Optional: wait for training to finish, then push outputs
+# -------------------------
+# Uncomment if you want this script to wait
+# wait $TRAIN_PID
+
+# -------------------------
+# Stage and commit outputs to GitHub (outputs folder)
+# -------------------------
+latest_output=$(ls -dt outputs/*/ | head -1)
+if [ -d "$latest_output" ]; then
+    echo "Latest run folder: $latest_output"
+    git add "$latest_output"
+    git commit -m "Add latest cluster run: $(basename $latest_output) - $(date '+%Y-%m-%d %H:%M:%S')"
+    git push origin main
+else
+    echo "No outputs folder found to push"
+fi
+
+# -------------------------
+# Deactivate environment
+# -------------------------
+conda deactivate
