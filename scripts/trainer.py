@@ -140,6 +140,7 @@ class Callbacks(DefaultCallbacks):
         self.episode_counter = 0
         self.current_iteration = current_iteration  # RLlib iteration number
         self.reward_hist = {}
+        self.reward_hist_full = {}
 
     def set_current_iteration(self, iteration: int):
         self.current_iteration = iteration
@@ -264,9 +265,12 @@ class Callbacks(DefaultCallbacks):
             self.reward_hist = {aid: [] for aid in last_episode_rewards.keys()}
         for aid, r in last_episode_rewards.items():
             self.reward_hist.setdefault(aid, []).append(r)
-            if len(self.reward_hist[aid]) > 5:  # keep last 5 iterations
-                self.reward_hist[aid].pop(0)
+        # Track full reward history for plotting
+        if not hasattr(self, "reward_hist_full"):
+            self.reward_hist_full = {aid: [] for aid in last_episode_rewards.keys()}
 
+        for aid, r in last_episode_rewards.items():
+            self.reward_hist_full.setdefault(aid, []).append(r)
         # Aggregate reward across agents
         # Aggregate reward across agents
         agent_rewards = np.array(list(last_episode_rewards.values()))
@@ -298,6 +302,10 @@ class Callbacks(DefaultCallbacks):
         # Print per-agent reward
         for aid, hist in self.reward_hist.items():
             print(f"  Agent {aid}: mean_reward_last5iters={np.mean(hist):.3f}")
+        # --- DEBUG PRINT ---
+        print("[DEBUG] reward_hist_full after iteration", result["training_iteration"])
+        for aid, hist in self.reward_hist_full.items():
+            print(f"  Agent {aid}: {hist}")
 
 
 def redirect_worker_logs(worker):
@@ -321,31 +329,47 @@ import copy
 
 def plot_reward_convergence(reward_hist: dict, save_dir: str):
     """
-    Plot per-agent rewards and aggregate mean ± std over iterations.
-
-    reward_hist: dict {agent_id: [reward_iter1, reward_iter2, ...]}
+    Plot per-agent rewards and aggregate mean ± 95% CI over iterations.
+    Handles np.nan for missing iterations.
     """
-    if not reward_hist or all(len(v) == 0 for v in reward_hist.values()):
-        print("[WARN] Reward history is empty. Skipping convergence plot.")
+    # Check if there is any data at all
+    if all(len(v) == 0 for v in reward_hist.values()):
+        print("[WARN] Reward history is empty. No data to plot.")
         return
-    iterations = np.arange(1, len(next(iter(reward_hist.values()))) + 1)
+
+    iterations = np.arange(1, max(len(v) for v in reward_hist.values()) + 1)
     plt.figure(figsize=(8, 5))
 
     # Per-agent reward lines
     for aid, hist in reward_hist.items():
-        plt.plot(iterations, hist, label=f"Agent {aid}")
+        y = np.array(hist, dtype=float)
+        if len(y) < len(iterations):
+            y = np.pad(y, (0, len(iterations) - len(y)), constant_values=np.nan)
+        plt.plot(iterations, y, label=f"Agent {aid}")
 
-    # Aggregate mean ± std
-    rewards_array = np.array(list(reward_hist.values()))
-    mean_reward = rewards_array.mean(axis=0)
-    std_reward = rewards_array.std(axis=0)
+    # Aggregate mean ± 95% CI
+    rewards_array = np.array(
+        [
+            np.pad(
+                np.array(h, dtype=float),
+                (0, len(iterations) - len(h)),
+                constant_values=np.nan,
+            )
+            for h in reward_hist.values()
+        ]
+    )
+    mean_reward = np.nanmean(rewards_array, axis=0)
+    num_agents = rewards_array.shape[0]
+    std_err = np.nanstd(rewards_array, axis=0) / np.sqrt(num_agents)
+    ci95 = std_err * stats.t.ppf(0.975, df=num_agents - 1)
+
     plt.fill_between(
         iterations,
-        mean_reward - std_reward,
-        mean_reward + std_reward,
+        mean_reward - ci95,
+        mean_reward + ci95,
         alpha=0.2,
         color="k",
-        label="±1 std",
+        label="95% CI",
     )
     plt.plot(iterations, mean_reward, "k--", label="Mean reward")
 
@@ -353,12 +377,11 @@ def plot_reward_convergence(reward_hist: dict, save_dir: str):
     plt.ylabel("Reward")
     plt.title("Reward convergence per agent")
     plt.legend()
+    plt.xticks(iterations)  # integer x-axis
     plt.tight_layout()
 
-    # Save figure
     save_path = os.path.join(save_dir, "reward_convergence.png")
     plt.savefig(save_path)
-    plt.show()
     print(f"[INFO] Reward convergence plot saved to {save_path}")
 
 
@@ -1173,6 +1196,8 @@ if __name__ == "__main__":
     # Create trainer
     # -------------------------
     trainer = create_trainer(config_yaml, save_dir, file_name)
+    callback_instance = trainer.workers.local_worker().callbacks
+    reward_hist_full = {}
     print(f"Number of policies: {len(trainer.workers.local_worker().policy_map)}")
 
     env_obj = trainer.workers.local_worker().env.env
@@ -1207,7 +1232,6 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------
     for iteration in tqdm(range(num_iters), disable=True):
-        callback_instance = trainer.workers.local_worker().callbacks
         if hasattr(callback_instance, "set_current_iteration"):
             callback_instance.set_current_iteration(iteration + 1)
         print(
@@ -1215,38 +1239,37 @@ if __name__ == "__main__":
             flush=True,
         )
         result = trainer.train()
-
-        print("[DEBUG] Current reward history per agent:")
-        for aid, hist in callback_instance.reward_hist.items():
-            print(f"  {aid}: {hist}")
+        last_rewards = trainer.workers.local_worker().env.env.get_last_episode_rewards()
+        for aid, r in last_rewards.items():
+            reward_hist_full.setdefault(aid, []).append(r)
+        # print("[DEBUG] Current reward history per agent:")
+        # for aid, hist in callback_instance.reward_hist.items():
+        #    print(f"  {aid}: {hist}")
         # -------------------------
         # Check for reward plateau (early stopping)
         # -------------------------
         moving_window = 20
-        min_iters_before_check = 200  # allow training to stabilize first
-
         min_iters_before_check = 50
         consecutive_plateau_checks = 3
         plateau_counter = 0
+
         if iteration + 1 >= min_iters_before_check:
             stop_training = True
-            for aid in callback_instance.reward_hist:
-                if len(callback_instance.reward_hist[aid]) < 2 * moving_window:
+            for aid in reward_hist_full:
+                if len(reward_hist_full[aid]) < 2 * moving_window:
                     stop_training = False
                     break
 
                 # Compute adaptive threshold: 1% of recent mean absolute reward
                 recent_abs_mean = np.mean(
-                    np.abs(callback_instance.reward_hist[aid][-2 * moving_window :])
+                    np.abs(reward_hist_full[aid][-2 * moving_window :])
                 )
                 threshold = 0.01 * max(recent_abs_mean, 1e-6)  # avoid 0 threshold
 
                 delta = np.abs(
-                    np.mean(callback_instance.reward_hist[aid][-moving_window:])
+                    np.mean(reward_hist_full[aid][-moving_window:])
                     - np.mean(
-                        callback_instance.reward_hist[aid][
-                            -2 * moving_window : -moving_window
-                        ]
+                        reward_hist_full[aid][-2 * moving_window : -moving_window]
                     )
                 )
 
@@ -1279,8 +1302,9 @@ if __name__ == "__main__":
         zip_run_outputs(save_dir, file_name)
 
     print("[INFO] Training complete. Generating reward convergence plot...")
+    print("[DEBUG] reward_hist_full before plotting:")
+    for aid, hist in reward_hist_full.items():
+        print(f"  {aid}: {hist}")
 
-    plot_reward_convergence(
-        reward_hist=callback_instance.reward_hist, save_dir=save_dir
-    )
+    plot_reward_convergence(reward_hist=reward_hist_full, save_dir=save_dir)
 ray.shutdown()
