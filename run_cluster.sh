@@ -8,36 +8,37 @@
 # chmod +x run_cluster.sh (actually to be done once only)
 # run_cluster.sh
 
-# 1. Go to home directory (or wherever you keep repos)
-cd ~/climate_repo_rice || exit
-# 2. Update repo
+# -------------------------
+# Move to project directory
+# -------------------------
+cd ~/climate_repo_rice || { echo "Cannot enter project dir"; exit 1; }
+
+# -------------------------
+# Update repo from GitHub
+# -------------------------
 if [ -d ".git" ]; then
     echo "Repo exists, pulling latest changes..."
-    git reset --hard HEAD
+    git reset --hard HEAD         # discard any local changes
     git pull origin main
 else
     echo "Cloning repo fresh..."
     git clone https://github.com/claudia-viaro/climate_repo_rice.git .
 fi
 
-# 3. Activate your Python environment
-# Adjust to your setup: either venv or Miniconda
-# For venv:
-source ~/miniconda/etc/profile.d/conda.sh   # adjust path if needed
-conda activate rice_env
-# 4. Run the trainer
-python scripts/trainer.py
+# -------------------------
+# Activate Python environment
+# -------------------------
+# Adjust path: your Miniconda is in ~/miniconda (parent directory)
+source ~/miniconda/etc/profile.d/conda.sh
+conda activate rice_env || { echo "Failed to activate conda environment"; exit 1; }
 
-# 5. Stage and commit outputs to GitHub
-# Detect the latest created folder in outputs
-latest_output=$(ls -dt outputs/*/ | head -1)
+# -------------------------
+# Run the trainer detached with logging
+# -------------------------
+LOGFILE=~/climate_repo_rice/run_$(date +%Y%m%d_%H%M%S).log
+echo "Logging to $LOGFILE"
+nohup python scripts/trainer.py > "$LOGFILE" 2>&1 &
 
-echo "Latest run folder: $latest_output"
+echo "Training started. You can safely close the SSH session."
+echo "Check log in real-time with: tail -f $LOGFILE"
 
-# Add and commit only the latest run folder
-git add "$latest_output"
-git commit -m "Add latest cluster run: $(basename $latest_output) - $(date '+%Y-%m-%d %H:%M:%S')"
-git push origin main
-
-# Deactivate environment
-conda deactivate
