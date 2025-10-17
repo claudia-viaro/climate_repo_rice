@@ -46,7 +46,7 @@ env:
     import_bids: 0,
     import_tariffs: 0}
   regions:
-    num_agents: 3 #can be either {3,7,20,27}
+    num_agents: 7 #can be either {3,7,20,27}
 
 # config
 logging:

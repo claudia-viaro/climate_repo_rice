@@ -23,7 +23,7 @@ fi
 # 3. Activate your Python environment
 # Adjust to your setup: either venv or Miniconda
 # For venv:
-source ~/miniconda3/etc/profile.d/conda.sh   # adjust path if needed
+source ~/miniconda/etc/profile.d/conda.sh   # adjust path if needed
 conda activate rice_env
 # 4. Run the trainer
 python scripts/trainer.py
