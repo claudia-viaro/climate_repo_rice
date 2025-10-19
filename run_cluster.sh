@@ -64,3 +64,8 @@ fi
 # Deactivate environment
 # -------------------------
 conda deactivate
+
+
+
+##### you can check at any time how it is doing
+# tail -f /home/viaro/climate_repo_rice/run_20251017_090902.log

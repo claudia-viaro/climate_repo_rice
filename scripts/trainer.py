@@ -5,6 +5,7 @@ Training script for the rice environment with action debugging.
 
 import os
 import warnings
+from scipy import stats
 
 # Must be before any Ray import
 os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
@@ -40,6 +41,7 @@ from my_project.utils.fixed_paths import (
     OUTPUTS_DIR,
     OTHER_YAMLS_DIR,
     UTILS_DIR,
+    CONFIG_DIR,
 )
 
 # from my_project.utils.desired_outputs import desired_outputs
@@ -635,7 +637,8 @@ def save_model_checkpoint(trainer_obj=None, save_directory=None, current_timeste
 
 def zip_run_outputs(save_dir, file_name):
     """
-    Zip the run outputs (checkpoints + logs) into a single archive.
+    Zip the contents of the run folder into a single archive inside the same folder.
+    Skips the zip itself to prevent recursion issues.
     """
     if not os.path.exists(save_dir):
         print(f"[WARN] save_dir does not exist: {save_dir}")
@@ -644,45 +647,49 @@ def zip_run_outputs(save_dir, file_name):
     zip_path = os.path.join(save_dir, f"{file_name}.zip")
     print(f"[DEBUG] Creating zip archive at: {zip_path}")
 
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(save_dir):
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        for root, _, files in os.walk(save_dir):
             for file in files:
                 file_path = os.path.join(root, file)
-                # Preserve folder structure relative to save_dir
                 rel_path = os.path.relpath(file_path, save_dir)
+
+                # Skip the zip file itself
+                if os.path.abspath(file_path) == os.path.abspath(zip_path):
+                    continue
+
                 zf.write(file_path, rel_path)
                 print(f"[DEBUG] Adding {file_path} as {rel_path} to zip")
 
     print(f"✅ Run outputs zipped to: {zip_path}")
+    return zip_path
 
 
-def load_model_checkpoints(trainer_obj=None, save_directory=None, ckpt_idx=-1):
+def load_model_checkpoints(trainer_obj, save_directory, ckpt_idx=-1):
     """
-    Load trained model checkpoints.
+    Load multi-agent model checkpoints into an RLlib trainer.
     """
     assert trainer_obj is not None
-    assert save_directory is not None
-    assert os.path.exists(save_directory), (
-        "Invalid folder path. "
-        "Please specify a valid directory to load the checkpoints from."
-    )
-    files = [f for f in os.listdir(save_directory) if f.endswith("state_dict")]
+    assert save_directory is not None and os.path.exists(save_directory)
 
-    assert len(files) == len(trainer_obj.config["multiagent"]["policies"])
+    files = [f for f in os.listdir(save_directory) if f.endswith(".state_dict")]
+    policies = list(trainer_obj.config["multiagent"]["policies"].keys())
+    assert len(files) >= len(policies), "Not enough checkpoint files for all policies."
 
     model_params = trainer_obj.get_weights()
-    for policy in model_params:
-        policy_models = [
-            os.path.join(save_directory, file) for file in files if policy in file
-        ]
-        # If there are multiple files, then use the ckpt_idx to specify the checkpoint
-        assert ckpt_idx < len(policy_models)
-        sorted_policy_models = sorted(policy_models, key=os.path.getmtime)
-        policy_model_file = sorted_policy_models[ckpt_idx]
-        model_params[policy] = torch.load(policy_model_file)
-        # print(f"Loaded model checkpoints {policy_model_file}.")
+    for policy in policies:
+        # find all files for this policy
+        policy_files = sorted(
+            [os.path.join(save_directory, f) for f in files if policy in f],
+            key=os.path.getmtime,
+        )
+        if not policy_files:
+            raise FileNotFoundError(f"No checkpoint files found for policy {policy}")
+        # select checkpoint index
+        ckpt_file = policy_files[ckpt_idx]
+        model_params[policy] = torch.load(ckpt_file)
 
     trainer_obj.set_weights(model_params)
+    print(f"[INFO] Loaded multi-agent checkpoints from {save_directory}")
 
 
 def apply_algo_specific_params(config, policy_config, algo_name):
@@ -1196,6 +1203,21 @@ if __name__ == "__main__":
     # Create trainer
     # -------------------------
     trainer = create_trainer(config_yaml, save_dir, file_name)
+
+    env_files = ["rice_env.py", "rice_helpers.py", "scenarios.py"]
+    env_dir = CONFIG_DIR / "envs"
+
+    for file in env_files:
+        src = env_dir / file
+        dst = Path(save_dir) / file
+        shutil.copyfile(src, dst)
+    yaml_file = Path(
+        args.yaml
+    )  # args.yaml default: UTILS_DIR / "rice_rllib_discrete.yaml"
+    dst_yaml = Path(save_dir) / yaml_file.name
+    shutil.copyfile(yaml_file, dst_yaml)
+    (Path(save_dir) / ".rllib").touch(exist_ok=False)
+
     callback_instance = trainer.workers.local_worker().callbacks
     reward_hist_full = {}
     print(f"Number of policies: {len(trainer.workers.local_worker().policy_map)}")
@@ -1297,14 +1319,32 @@ if __name__ == "__main__":
 
     if learner_stats_logs:
         save_jsonl(save_dir, file_name, learner_stats_logs, suffix="learner_stats")
-    # Outside the training loop: zip everything once
-    if save_checkpoints_enabled:
-        zip_run_outputs(save_dir, file_name)
+        print("[INFO] Training complete. Generating reward convergence plot...")
 
-    print("[INFO] Training complete. Generating reward convergence plot...")
     print("[DEBUG] reward_hist_full before plotting:")
     for aid, hist in reward_hist_full.items():
         print(f"  {aid}: {hist}")
 
     plot_reward_convergence(reward_hist=reward_hist_full, save_dir=save_dir)
-ray.shutdown()
+
+    # -------------------------
+    # Zip and cleanup
+    # -------------------------
+    if save_checkpoints_enabled:
+        zip_path = zip_run_outputs(save_dir, file_name)
+        print(f"[INFO] Zipped run results to: {zip_path}")
+
+        # Remove original files except the zip
+        try:
+            for f in os.listdir(save_dir):
+                fp = os.path.join(save_dir, f)
+                if os.path.abspath(fp) != os.path.abspath(zip_path):
+                    if os.path.isdir(fp):
+                        shutil.rmtree(fp)
+                    else:
+                        os.remove(fp)
+            print(f"[CLEANUP] Removed original files, kept only the zip: {zip_path}")
+        except Exception as e:
+            print(f"[WARNING] Cleanup failed: {e}")
+
+    ray.shutdown()
