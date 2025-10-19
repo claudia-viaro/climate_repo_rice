@@ -1180,6 +1180,7 @@ if __name__ == "__main__":
     save_checkpoints_enabled = saving_cfg.get("save_checkpoints", True)
     save_climate_enabled = saving_cfg.get("save_climate_info", True)
     save_iter = saving_cfg.get("save_iteration", None)
+    save_ckeckpoints_freq = saving_cfg.get("model_params_save_freq", None)
 
     # -------------------------
     # Create save directory
@@ -1261,6 +1262,28 @@ if __name__ == "__main__":
             flush=True,
         )
         result = trainer.train()
+        # -------------------------
+        # Debug: check env steps sampled
+        # -------------------------
+        total_timesteps = result.get("timesteps_total", None)
+
+        # -------------------------
+        # Save model checkpoint periodically
+        # -------------------------
+        if save_checkpoints_enabled and (iteration + 1) % save_ckeckpoints_freq == 0:
+            checkpoints_dir = save_dir / "checkpoints"
+            checkpoints_dir.mkdir(parents=True, exist_ok=True)
+            save_model_checkpoint(trainer, checkpoints_dir, total_timesteps)
+            print(f"[INFO] Saved checkpoint at iteration {iteration+1}")
+        if learner_stats_logs:
+            save_jsonl(
+                save_dir,
+                file_name,
+                learner_stats_logs,
+                suffix="learner_stats",
+                append=True,
+            )
+
         last_rewards = trainer.workers.local_worker().env.env.get_last_episode_rewards()
         for aid, r in last_rewards.items():
             reward_hist_full.setdefault(aid, []).append(r)
@@ -1308,18 +1331,6 @@ if __name__ == "__main__":
                     break
             else:
                 plateau_counter = 0
-    # -------------------------
-    # Model checkpointing
-    # -------------------------
-    if save_checkpoints_enabled:
-        total_timesteps = getattr(trainer, "num_env_steps_sampled", None)
-        # or
-        checkpoints_dir = save_dir / "checkpoints"
-        save_model_checkpoint(trainer, checkpoints_dir, total_timesteps)
-
-    if learner_stats_logs:
-        save_jsonl(save_dir, file_name, learner_stats_logs, suffix="learner_stats")
-        print("[INFO] Training complete. Generating reward convergence plot...")
 
     print("[DEBUG] reward_hist_full before plotting:")
     for aid, hist in reward_hist_full.items():

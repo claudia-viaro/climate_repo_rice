@@ -1,0 +1,48 @@
+import zipfile
+from pathlib import Path
+import matplotlib.pyplot as plt
+import os
+
+# Path to your zipped run
+zip_path = Path("/home/claudiav/RICE-N-exp/outputs/1760872741/1760872741_default_7.zip")
+
+# Temporary folder to unzip
+tmp_dir = Path("/tmp/rice_run_check")
+tmp_dir.mkdir(parents=True, exist_ok=True)
+
+# -------------------------
+# Inspect zip contents
+# -------------------------
+with zipfile.ZipFile(zip_path, "r") as zf:
+    file_list = zf.namelist()
+    print(f"Total files in zip: {len(file_list)}")
+    for f in file_list:
+        print(f" - {f}")
+
+    # Extract everything to tmp_dir
+    zf.extractall(tmp_dir)
+
+# -------------------------
+# Check checkpoints
+# -------------------------
+checkpoints_dir = tmp_dir / "checkpoints"
+if checkpoints_dir.exists():
+    ckpt_files = list(checkpoints_dir.glob("*"))
+    print(f"\nCheckpoints found ({len(ckpt_files)} files):")
+    for f in ckpt_files:
+        print(f" - {f.name}")
+else:
+    print("\nNo checkpoints folder found!")
+
+# -------------------------
+# Open reward convergence plot
+# -------------------------
+plot_path = tmp_dir / "reward_convergence.png"
+if plot_path.exists():
+    img = plt.imread(plot_path)
+    plt.imshow(img)
+    plt.axis("off")
+    plt.title("Reward Convergence")
+    plt.show()
+else:
+    print("\nNo reward convergence plot found!")
