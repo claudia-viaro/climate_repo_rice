@@ -6,7 +6,7 @@
 # enter the password twice 
 # cd ~/climate_repo_rice
 # chmod +x run_cluster.sh (actually to be done once only)
-# run_cluster.sh
+# ./run_cluster.sh
 
 # -------------------------
 # Move to project directory
