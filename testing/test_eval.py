@@ -14,7 +14,7 @@ python -m testing.test_eval --run outputs/1760881212/1760881212_default_7.zip --
 5) Works both with zipped runs or unzipped directories
 
 It produce: 50 episodes
-1) Results: outputs/1760881212/eval/episode_summaries.pkl
+1) Results: outputs/*******/eval/episode_summaries.pkl
 
 episode_summaries.pkl
     List of all episodes, each entry contains:

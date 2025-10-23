@@ -107,40 +107,38 @@ def main():
     # -----------------------
     # Evaluation analysis
     # -----------------------
-    if args.eval:
-        eval_base = run_dir / "eval"
-        feat_out = eval_base / "feat_dir"
-        config = find_and_load_config(eval_base)
-        num_agents = config.get("env", {}).get("regions", {}).get("num_agents", None)
-        print("num_agents", num_agents)
 
-        if not eval_base.exists():
-            print(
-                f"⚠️ No eval folder found at {eval_base}, skipping evaluation analysis."
-            )
-        else:
-            # Ensure feat_dir exists
-            feat_out.mkdir(parents=True, exist_ok=True)
-            print(f"\n📊 Running feature analysis → {feat_out}")
+    eval_base = run_dir / "eval"
+    feat_out = eval_base / "feat_dir"
+    config = find_and_load_config(eval_base)
+    num_agents = config.get("env", {}).get("regions", {}).get("num_agents", None)
+    print("num_agents", num_agents)
 
-            try:
+    if not eval_base.exists():
+        print(f"⚠️ No eval folder found at {eval_base}, skipping evaluation analysis.")
+    else:
+        # Ensure feat_dir exists
+        feat_out.mkdir(parents=True, exist_ok=True)
+        print(f"\n📊 Running feature analysis → {feat_out}")
 
-                episodes = load_episodes(eval_base, episodes_file=args.episodes_file)
-                metrics = compute_basic_metrics(episodes)
-                df = pd.DataFrame([metrics])
-                df.to_csv(feat_out / "metrics_summary.csv", index=False)
-                print(f"💾 Metrics saved to {feat_out / 'metrics_summary.csv'}")
+        try:
 
-                plot_rewards(episodes, feat_out)
-                plot_info_variables(episodes, feat_out)
-                plot_global_variables_combined(episodes, feat_out)
-                if num_agents:
-                    plot_metrics_per_region(
-                        episodes, feat_out, regions=list(range(num_agents))
-                    )
-                print(f"✅ Evaluation plots saved → {feat_out}")
-            except Exception as e:
-                print(f"⚠️ Evaluation analysis failed: {e}")
+            episodes = load_episodes(eval_base, episodes_file=args.episodes_file)
+            metrics = compute_basic_metrics(episodes)
+            df = pd.DataFrame([metrics])
+            df.to_csv(feat_out / "metrics_summary.csv", index=False)
+            print(f"💾 Metrics saved to {feat_out / 'metrics_summary.csv'}")
+
+            plot_rewards(episodes, feat_out)
+            plot_info_variables(episodes, feat_out)
+            plot_global_variables_combined(episodes, feat_out)
+            if num_agents:
+                plot_metrics_per_region(
+                    episodes, feat_out, regions=list(range(num_agents))
+                )
+            print(f"✅ Evaluation plots saved → {feat_out}")
+        except Exception as e:
+            print(f"⚠️ Evaluation analysis failed: {e}")
 
 
 if __name__ == "__main__":

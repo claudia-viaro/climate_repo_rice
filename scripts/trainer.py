@@ -312,6 +312,7 @@ def plot_training_metrics(save_dir: str, file_name: str):
             plt.title(f"{metric} over iterations (black = mean)")
             plt.xlabel("Iteration")
             plt.ylabel(metric)
+            plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
             plt.tight_layout()
             plt.savefig(os.path.join(save_dir, f"{metric}_curve.png"))
             plt.close()
