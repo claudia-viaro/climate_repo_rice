@@ -75,11 +75,9 @@ from tqdm import tqdm
 import datetime
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from typing import Dict
-from ray.rllib.evaluation.episode import Episode
 from ray.rllib.evaluation.rollout_worker import RolloutWorker
 from ray.rllib.env.base_env import BaseEnv
 from ray.rllib.policy.policy import Policy
-import ray.rllib.utils.deprecation
 import functools
 import ray
 import torch
@@ -128,21 +126,21 @@ class Callbacks(DefaultCallbacks):
         self,
         current_iteration=1,
         save_iteration=None,
-        save_enabled=True,
+        save_policy_enabled=True,
         save_dir=None,
         file_name=None,
         max_iterations=None,
     ):
         super().__init__()
         self.save_iteration = save_iteration  # RLlib iteration to trigger saving
-        self.save_enabled = save_enabled
+        self.save_policy_enabled = save_policy_enabled
         self.save_dir = save_dir
         self.file_name = file_name
         self.max_iterations = max_iterations
         self.episode_counter = 0
         self.current_iteration = current_iteration  # RLlib iteration number
         self.reward_hist = {}
-        self.reward_hist_full = {}
+        self.reward_hist_full = {}  # {agent_id: [rewards_per_episode]}
 
     def set_current_iteration(self, iteration: int):
         self.current_iteration = iteration
@@ -153,71 +151,23 @@ class Callbacks(DefaultCallbacks):
     def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
         self.episode_counter += 1
 
-        # Only save if enabled and we are at the requested RLlib iteration
-        if self.save_enabled and (
-            self.save_iteration is None or self.current_iteration == self.save_iteration
-        ):
-            env = worker.env.env  # unwrap to underlying env
-
-            print(
-                f"[DEBUG] Saving triggered at iteration {self.current_iteration}, episode {self.episode_counter}"
-            )
-
-            # Check RL info
-            if hasattr(env, "last_info_rl") and env.last_info_rl:
-
-                save_jsonl(
-                    save_dir=self.save_dir,
-                    file_name=f"{self.file_name}_rl_episode_iter{self.current_iteration}",
-                    entries=env.last_info_rl,
-                    suffix="jsonl",
-                    append=True,
-                )
-            else:
-                print("[DEBUG] No RL info to save for this episode")
-
-            # Check Diffs info
-            if hasattr(env, "last_info_diffs") and env.last_info_diffs:
-
-                save_jsonl(
-                    save_dir=self.save_dir,
-                    file_name=f"{self.file_name}_diffs_episode_iter{self.current_iteration}",
-                    entries=env.last_info_diffs,
-                    suffix="jsonl",
-                    append=True,
-                )
-            else:
-                print("[DEBUG] No diff info to save for this episode")
-
     def on_train_result(self, *, algorithm, result: dict, **kwargs):
         """
         Called after each training iteration.
         Aggregates stats across policies, prints them, and saves them.
         Works for A2C/PPO/SAC.
         """
-        env = algorithm.workers.local_worker().env.env
 
+        # --- Extract learner stats across all policies ---
+        learner_info = result.get("info", {}).get("learner", {})
         per_policy_stats = []
 
         # Loop over all policies
-        for policy_id, stats in result["info"].get("learner", {}).items():
-            ls = stats.get("learner_stats", {})
-
-            # Save per-policy stats
-            policy_stats = {
-                "iteration": result["training_iteration"],
-                "policy_id": policy_id,
-            }
-            policy_stats.update(ls)
-
-            # Optionally add environment info
-            if hasattr(env, "last_info_diffs") and env.last_info_diffs:
-                last_climate_step = env.last_info_diffs[-1]
-                policy_stats["temp_rise_rl"] = last_climate_step.get(
-                    "temp_rise_rl", None
-                )
-
-            per_policy_stats.append(policy_stats)
+        for pid, info in learner_info.items():
+            ls = info.get("learner_stats", {})
+            entry = {"iteration": iteration, "policy_id": pid}
+            entry.update(ls)
+            per_policy_stats.append(entry)
 
         # Aggregate stats across policies
         aggregated_stats = {"iteration": result["training_iteration"]}
@@ -232,82 +182,69 @@ class Callbacks(DefaultCallbacks):
                 vals = [d.get(k) for d in per_policy_stats if d.get(k) is not None]
                 aggregated_stats[k] = float(np.mean(vals)) if vals else None
 
-        # Print aggregate stats to console
+        env = algorithm.workers.local_worker().env.env
+        last_rewards = getattr(env, "get_last_episode_rewards", lambda: {})()
+
+        per_agent_entries = []
+        if last_rewards:
+            for aid, r in last_rewards.items():
+                self.reward_hist_full.setdefault(aid, []).append(r)
+                print(f"  {aid}: {r}")
+                per_agent_entries.append(
+                    {
+                        "iteration": iteration,
+                        "agent_id": aid,
+                        "episode_index": len(
+                            self.reward_hist_full[aid]
+                        ),  # 1-based episode count
+                        "reward": float(r),
+                    }
+                )
+            # Aggregate across agents
+            agent_rewards = np.array(list(last_rewards.values()))
+            avg_reward = agent_rewards.mean()
+            std_reward = agent_rewards.std()
+            aggregated_stats["avg_reward"] = float(avg_reward)
+            aggregated_stats["std_reward"] = float(std_reward)
+
+        # --- Print concise summary ---
+        avg_r = aggregated_stats.get("avg_reward", np.nan)
+        pl = aggregated_stats.get("policy_loss", np.nan)
+        vl = aggregated_stats.get("vf_loss", np.nan)
         print(
-            f"[Iteration {result['training_iteration']}] Aggregate learner stats: {aggregated_stats}"
+            f"[Iter {iteration}] avg_reward={avg_r:.3f}, policy_loss={pl:.3f}, vf_loss={vl:.3f}"
         )
 
-        # Save per-policy stats to JSONL
-        if self.save_enabled:
+        # Optional short moving average (last 5 iters)
+        window = 5
+        for aid, hist in self.reward_hist_full.items():
+            recent_mean = (
+                np.mean(hist[-window:]) if len(hist) >= window else np.mean(hist)
+            )
+            print(f"  Agent {aid}: mean_reward_last{window}iters={recent_mean:.3f}")
+
+        # --- Save to JSONL ---
+        if self.save_policy_enabled:
             save_jsonl(
                 save_dir=self.save_dir,
                 file_name=f"{self.file_name}_learner_stats_per_policy",
                 entries=per_policy_stats,
-                suffix="jsonl",
                 append=True,
             )
-
-        # Save aggregated stats to JSONL
-        if self.save_enabled:
             save_jsonl(
                 save_dir=self.save_dir,
                 file_name=f"{self.file_name}_learner_stats_aggregated",
                 entries=[aggregated_stats],
-                suffix="jsonl",
                 append=True,
             )
-
-        # Track per-agent rewards (economic utility)
-        last_episode_rewards = (
-            env.get_last_episode_rewards()
-        )  # return dict {agent_id: reward}
-
-        # Moving averages for per-agent rewards
-        if not hasattr(self, "reward_hist"):
-            self.reward_hist = {aid: [] for aid in last_episode_rewards.keys()}
-        for aid, r in last_episode_rewards.items():
-            self.reward_hist.setdefault(aid, []).append(r)
-        # Track full reward history for plotting
-        if not hasattr(self, "reward_hist_full"):
-            self.reward_hist_full = {aid: [] for aid in last_episode_rewards.keys()}
-
-        for aid, r in last_episode_rewards.items():
-            self.reward_hist_full.setdefault(aid, []).append(r)
-        # Aggregate reward across agents
-        # Aggregate reward across agents
-        agent_rewards = np.array(list(last_episode_rewards.values()))
-        avg_reward = agent_rewards.mean()
-        std_reward = agent_rewards.std()
-        print(
-            f"Iteration {result['training_iteration']}: avg_reward={avg_reward:.3f} ± {std_reward:.3f}"
-        )
-
-        # Aggregate learner stats across policies (losses)
-        agg_policy_loss = []
-        agg_vf_loss = []
-        for pid, stats in result["info"]["learner"].items():
-            ls = stats["learner_stats"]
-            if ls.get("policy_loss") is not None:
-                agg_policy_loss.append(ls["policy_loss"])
-            if ls.get("vf_loss") is not None:
-                agg_vf_loss.append(ls["vf_loss"])
-        avg_policy_loss = np.mean(agg_policy_loss) if agg_policy_loss else None
-        avg_vf_loss = np.mean(agg_vf_loss) if agg_vf_loss else None
-
-        # Print summary
-        print(
-            f"Iteration {result['training_iteration']}: "
-            f"avg_reward={avg_reward:.3f}, "
-            f"policy_loss={avg_policy_loss:.3f}, vf_loss={avg_vf_loss:.3f}"
-        )
-
-        # Print per-agent reward
-        for aid, hist in self.reward_hist.items():
-            print(f"  Agent {aid}: mean_reward_last5iters={np.mean(hist):.3f}")
-        # --- DEBUG PRINT ---
-        print("[DEBUG] reward_hist_full after iteration", result["training_iteration"])
-        for aid, hist in self.reward_hist_full.items():
-            print(f"  Agent {aid}: {hist}")
+            # 3️⃣ Per-agent rewards (NEW)
+            if per_agent_entries:
+                save_jsonl(
+                    save_dir=self.save_dir,
+                    file_name=f"{self.file_name}_per_agent_rewards",
+                    entries=per_agent_entries,
+                    append=True,
+                )
 
 
 def redirect_worker_logs(worker):
@@ -327,64 +264,87 @@ def redirect_worker_logs(worker):
 
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import copy
+import pandas as pd
 
 
-def plot_reward_convergence(reward_hist: dict, save_dir: str):
-    """
-    Plot per-agent rewards and aggregate mean ± 95% CI over iterations.
-    Handles np.nan for missing iterations.
-    """
-    # Check if there is any data at all
-    if all(len(v) == 0 for v in reward_hist.values()):
-        print("[WARN] Reward history is empty. No data to plot.")
+def plot_training_metrics(save_dir: str, file_name: str):
+    """Plots reward convergence and learner losses from saved JSONL."""
+    import json
+    import glob
+
+    # Load aggregated stats
+    agg_files = glob.glob(
+        os.path.join(save_dir, "logs", f"{file_name}_learner_stats_aggregated.jsonl")
+    )
+    if not agg_files:
+        print(f"[WARN] No aggregated stats file found in {save_dir}/logs")
+        return
+    agg_file = agg_files[-1]
+    df = pd.read_json(agg_file, lines=True)
+    iterations = df["iteration"]
+    # -------------------------
+    # Plot 1: Reward convergence
+    # -------------------------
+    if "avg_reward" in df.columns:
+        plt.figure(figsize=(7, 5))
+        plt.plot(iterations, df["avg_reward"], "k--", linewidth=2)
+        plt.fill_between(
+            iterations,
+            df["avg_reward"] - df["std_reward"],
+            df["avg_reward"] + df["std_reward"],
+            alpha=0.2,
+            color="gray",
+        )
+        plt.title("Reward convergence (black line = global mean)")
+        plt.xlabel("Iteration")
+        plt.ylabel("Average Reward")
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, "reward_convergence.png"))
+        plt.close()
+
+    # -------------------------
+    # Plot 2–5: Loss metrics
+    # -------------------------
+    for metric in ["policy_loss", "vf_loss", "entropy", "kl"]:
+        if metric in df.columns:
+            plt.figure(figsize=(7, 5))
+            plt.plot(iterations, df[metric], "k-", linewidth=1.8)
+            plt.title(f"{metric} over iterations (black = mean)")
+            plt.xlabel("Iteration")
+            plt.ylabel(metric)
+            plt.tight_layout()
+            plt.savefig(os.path.join(save_dir, f"{metric}_curve.png"))
+            plt.close()
+    # ============================================================
+    # 🆕 Plot per-agent rewards
+    # ============================================================
+    per_agent_file = os.path.join(save_dir, f"{file_name}_per_agent_rewards.jsonl")
+    if not os.path.exists(per_agent_file):
+        print(f"[INFO] No per-agent reward file found at {per_agent_file}")
         return
 
-    iterations = np.arange(1, max(len(v) for v in reward_hist.values()) + 1)
+    df_agents = pd.read_json(per_agent_file, lines=True)
+    if df_agents.empty:
+        print("[WARN] Per-agent reward file is empty.")
+        return
+
     plt.figure(figsize=(8, 5))
+    for agent_id, group in df_agents.groupby("agent_id"):
+        plt.plot(
+            group["iteration"],
+            group["reward"].rolling(window=5, min_periods=1).mean(),
+            label=f"Agent {agent_id}",
+        )
 
-    # Per-agent reward lines
-    for aid, hist in reward_hist.items():
-        y = np.array(hist, dtype=float)
-        if len(y) < len(iterations):
-            y = np.pad(y, (0, len(iterations) - len(y)), constant_values=np.nan)
-        plt.plot(iterations, y, label=f"Agent {aid}")
-
-    # Aggregate mean ± 95% CI
-    rewards_array = np.array(
-        [
-            np.pad(
-                np.array(h, dtype=float),
-                (0, len(iterations) - len(h)),
-                constant_values=np.nan,
-            )
-            for h in reward_hist.values()
-        ]
-    )
-    mean_reward = np.nanmean(rewards_array, axis=0)
-    num_agents = rewards_array.shape[0]
-    std_err = np.nanstd(rewards_array, axis=0) / np.sqrt(num_agents)
-    ci95 = std_err * stats.t.ppf(0.975, df=num_agents - 1)
-
-    plt.fill_between(
-        iterations,
-        mean_reward - ci95,
-        mean_reward + ci95,
-        alpha=0.2,
-        color="k",
-        label="95% CI",
-    )
-    plt.plot(iterations, mean_reward, "k--", label="Mean reward")
-
-    plt.xlabel("Iteration")
+    plt.title("Per-Agent Reward Convergence (5-iter rolling mean)")
+    plt.xlabel("Training Iteration")
     plt.ylabel("Reward")
-    plt.title("Reward convergence per agent")
     plt.legend()
-    plt.xticks(iterations)  # integer x-axis
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
-
-    save_path = os.path.join(save_dir, "reward_convergence.png")
-    plt.savefig(save_path)
-    print(f"[INFO] Reward convergence plot saved to {save_path}")
+    plt.savefig(os.path.join(save_dir, "per_agent_rewards.png"), dpi=150)
+    plt.close()
+    print(f"✅ Plots saved in {save_dir}")
 
 
 def get_config_yaml(yaml_path):
@@ -512,7 +472,6 @@ class EnvWrapper(MultiAgentEnv):
         assert isinstance(actions, dict)
 
         obs, rew, terminateds, truncateds, info = self.env.step(actions)
-
         return (
             recursive_list_to_np_array(obs),
             rew,
@@ -531,7 +490,6 @@ def get_rllib_config(config_yaml=None, env_class=None, seed=None, save_dir=None)
     assert env_class is not None
     env_config = dict(config_yaml["env"])
     env_config["region_yamls_path"] = str(REGION_YAMLS_DIR)
-
     # Attach logs_dir if save_dir was passed
     if save_dir is not None:
         logs_dir = Path(save_dir) / "logs"
@@ -781,7 +739,7 @@ def create_trainer(
         num_rollout_workers=rllib_config["num_workers"],
         num_envs_per_worker=rllib_config["num_envs_per_worker"],
         rollout_fragment_length=rllib_config["env_config"].get(
-            "episode_length", 100
+            "episode_length", 60
         ),  # set rollout_fragment_length = episode_length
     )
     config = config.framework(rllib_config["framework"])
@@ -796,7 +754,7 @@ def create_trainer(
     config = config.callbacks(
         lambda: Callbacks(
             save_iteration=save_cfg.get("save_iteration", None),
-            save_enabled=save_cfg.get("save_climate_info", True),
+            save_policy_enabled=save_cfg.get("save_policy_info", True),
             save_dir=save_dir,
             file_name=file_name,
             max_iterations=config_yaml["trainer"].get("num_episodes", None),
@@ -1094,12 +1052,12 @@ def discrete_action_to_float(index, num_bins=10, max_value=0.9):
 # =========================
 # Logging helpers
 # =========================
-def save_jsonl(save_dir, file_name, entries, suffix, append=False):
+def save_jsonl(save_dir, file_name, entries, append=False):
     """Save a list of entries into a JSONL file."""
     logs_dir = Path(save_dir) / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    jsonl_path = logs_dir / f"{file_name}_{suffix}.jsonl"
+    jsonl_path = logs_dir / f"{file_name}.jsonl"
 
     with open(jsonl_path, "a" if append else "w") as f:
         for entry in entries:
@@ -1178,9 +1136,9 @@ if __name__ == "__main__":
     # -------------------------
     saving_cfg = config_yaml.get("saving", {})
     save_checkpoints_enabled = saving_cfg.get("save_checkpoints", True)
-    save_climate_enabled = saving_cfg.get("save_climate_info", True)
-    save_iter = saving_cfg.get("save_iteration", None)
     save_ckeckpoints_freq = saving_cfg.get("model_params_save_freq", None)
+    save_policy_enabled = saving_cfg.get("save_policy_info", True)
+    save_iter = saving_cfg.get("save_iteration", None)
 
     # -------------------------
     # Create save directory
@@ -1220,22 +1178,9 @@ if __name__ == "__main__":
     (Path(save_dir) / ".rllib").touch(exist_ok=False)
 
     callback_instance = trainer.workers.local_worker().callbacks
-    reward_hist_full = {}
     print(f"Number of policies: {len(trainer.workers.local_worker().policy_map)}")
 
     env_obj = trainer.workers.local_worker().env.env
-
-    # ✅ Save BAU history to JSONL
-    if hasattr(env_obj, "bau_history") and len(env_obj.bau_history) > 0:
-        bau_file_path = save_jsonl(
-            save_dir=save_dir,
-            file_name=f"{file_name}_bau",
-            entries=env_obj.bau_history,
-            suffix="jsonl",
-        )
-        print(f"[DEBUG] BAU history saved to: {bau_file_path}")
-    else:
-        print("[DEBUG] No BAU history found to save.")
 
     env_wrapper = trainer.workers.local_worker().env
     episode_length = env_obj.episode_length
@@ -1248,8 +1193,6 @@ if __name__ == "__main__":
     print(f"Episode length: {episode_length}")
     print(f"Total steps: {num_episodes * episode_length}")
     print(f"Episodes per iter: {episodes_per_iter}")
-
-    learner_stats_logs = []  # Learner stats per iteration
 
     # -------------------------
     # Training loop
@@ -1275,21 +1218,7 @@ if __name__ == "__main__":
             checkpoints_dir.mkdir(parents=True, exist_ok=True)
             save_model_checkpoint(trainer, checkpoints_dir, total_timesteps)
             print(f"[INFO] Saved checkpoint at iteration {iteration+1}")
-        if learner_stats_logs:
-            save_jsonl(
-                save_dir,
-                file_name,
-                learner_stats_logs,
-                suffix="learner_stats",
-                append=True,
-            )
 
-        last_rewards = trainer.workers.local_worker().env.env.get_last_episode_rewards()
-        for aid, r in last_rewards.items():
-            reward_hist_full.setdefault(aid, []).append(r)
-        # print("[DEBUG] Current reward history per agent:")
-        # for aid, hist in callback_instance.reward_hist.items():
-        #    print(f"  {aid}: {hist}")
         # -------------------------
         # Check for reward plateau (early stopping)
         # -------------------------
@@ -1332,11 +1261,7 @@ if __name__ == "__main__":
             else:
                 plateau_counter = 0
 
-    print("[DEBUG] reward_hist_full before plotting:")
-    for aid, hist in reward_hist_full.items():
-        print(f"  {aid}: {hist}")
-
-    plot_reward_convergence(reward_hist=reward_hist_full, save_dir=save_dir)
+    plot_training_metrics(save_dir=save_dir, file_name=file_name)
 
     # -------------------------
     # Zip and cleanup

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 
 # Path to your zipped run
-zip_path = Path("/home/claudiav/RICE-N-exp/outputs/1760872741/1760872741_default_7.zip")
+zip_path = Path("/home/claudiav/RICE-N-exp/outputs/1760881212/1760881212_default_7.zip")
 
 # Temporary folder to unzip
 tmp_dir = Path("/tmp/rice_run_check")

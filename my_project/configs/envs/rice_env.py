@@ -654,9 +654,13 @@ class Rice(gym.Env):
         else:
             if terminateds["__all__"]:
                 info_rl = self._get_rl_episode_info()
-                info_diffs = self._get_climate_episode_info()
+
                 self.last_info_rl = info_rl
-                self.last_info_diffs = info_diffs
+                # Attach full BAU history for the episode
+                if hasattr(self, "bau_history"):
+                    self.last_bau_history = (
+                        self.bau_history
+                    )  # optional alias for clarity
 
             info = {
                 "__common__": {
@@ -682,9 +686,10 @@ class Rice(gym.Env):
             "savings_all_regions",
             "mitigation_rates_all_regions",
             "current_balance_all_regions",
-            # "production_factor_all_regions", exognous
-            # "intensity_all_regions", exogenous
-            # "mitigation_cost_all_regions", exogenous
+            "production_factor_all_regions",  # exognous
+            "intensity_all_regions",  # exogenous
+            "mitigation_cost_all_regions",  # exogenous
+            "labor_all_regions",
             "damages_all_regions",
             "abatement_cost_all_regions",
             "production_all_regions",
@@ -696,7 +701,8 @@ class Rice(gym.Env):
             "requested_mitigation_rate",
             "proposal_decisions",
             # "global_cumulative_emissions", # from another carbon mass model, not the base
-            "aux_m_all_regions",
+            "aux_m_all_regions",  # regional carbon mass
+            "global_carbon_mass",
             "global_emissions",
         ]
 

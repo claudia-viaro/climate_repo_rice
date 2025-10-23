@@ -19,11 +19,12 @@ cd ~/climate_repo_rice || { echo "Cannot enter project dir"; exit 1; }
 if [ -d ".git" ]; then
     echo "Repo exists, pulling latest changes..."
     git reset --hard HEAD         # discard any local changes
+    echo "my_project/configs/region_yamls/">> .git/info/exclude
     git pull origin main
 else
     echo "Cloning repo fresh..."
     git clone https://github.com/claudia-viaro/climate_repo_rice.git .
-fi
+
 
 # -------------------------
 # Activate Python environment
