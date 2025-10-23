@@ -125,14 +125,12 @@ class Callbacks(DefaultCallbacks):
     def __init__(
         self,
         current_iteration=1,
-        save_iteration=None,
         save_policy_enabled=True,
         save_dir=None,
         file_name=None,
         max_iterations=None,
     ):
         super().__init__()
-        self.save_iteration = save_iteration  # RLlib iteration to trigger saving
         self.save_policy_enabled = save_policy_enabled
         self.save_dir = save_dir
         self.file_name = file_name
@@ -754,7 +752,6 @@ def create_trainer(
     save_cfg = config_yaml.get("saving", {})
     config = config.callbacks(
         lambda: Callbacks(
-            save_iteration=save_cfg.get("save_iteration", None),
             save_policy_enabled=save_cfg.get("save_policy_info", True),
             save_dir=save_dir,
             file_name=file_name,
@@ -1139,7 +1136,6 @@ if __name__ == "__main__":
     save_checkpoints_enabled = saving_cfg.get("save_checkpoints", True)
     save_ckeckpoints_freq = saving_cfg.get("model_params_save_freq", None)
     save_policy_enabled = saving_cfg.get("save_policy_info", True)
-    save_iter = saving_cfg.get("save_iteration", None)
 
     # -------------------------
     # Create save directory
@@ -1219,48 +1215,6 @@ if __name__ == "__main__":
             checkpoints_dir.mkdir(parents=True, exist_ok=True)
             save_model_checkpoint(trainer, checkpoints_dir, total_timesteps)
             print(f"[INFO] Saved checkpoint at iteration {iteration+1}")
-
-        # -------------------------
-        # Check for reward plateau (early stopping)
-        # -------------------------
-        moving_window = 20
-        min_iters_before_check = 50
-        consecutive_plateau_checks = 3
-        plateau_counter = 0
-
-        if iteration + 1 >= min_iters_before_check:
-            stop_training = True
-            for aid in reward_hist_full:
-                if len(reward_hist_full[aid]) < 2 * moving_window:
-                    stop_training = False
-                    break
-
-                # Compute adaptive threshold: 1% of recent mean absolute reward
-                recent_abs_mean = np.mean(
-                    np.abs(reward_hist_full[aid][-2 * moving_window :])
-                )
-                threshold = 0.01 * max(recent_abs_mean, 1e-6)  # avoid 0 threshold
-
-                delta = np.abs(
-                    np.mean(reward_hist_full[aid][-moving_window:])
-                    - np.mean(
-                        reward_hist_full[aid][-2 * moving_window : -moving_window]
-                    )
-                )
-
-                if delta >= threshold:
-                    stop_training = False
-                    break
-
-            if stop_training:
-                plateau_counter += 1
-                if plateau_counter >= consecutive_plateau_checks:
-                    print(
-                        f"[INFO] Stopping training: reward plateau reached at iteration {iteration+1}"
-                    )
-                    break
-            else:
-                plateau_counter = 0
 
     plot_training_metrics(save_dir=save_dir, file_name=file_name)
 
