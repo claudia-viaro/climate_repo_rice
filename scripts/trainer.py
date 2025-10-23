@@ -1152,7 +1152,11 @@ if __name__ == "__main__":
     # -------------------------
     # Initialize Ray
     # -------------------------
-    ray.init(ignore_reinit_error=True)
+    ray.init(
+        ignore_reinit_error=True,
+        _temp_dir=os.path.expanduser("~/ray_tmp"),
+        local_mode=False,  # set to True if you want fully local (debug)
+    )
     set_num_agents(config_yaml)
 
     # -------------------------
