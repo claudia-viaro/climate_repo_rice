@@ -7,11 +7,6 @@ for (FEATURES EVALUATION)
     it will Look for outputs/1761139151/eval/episode_summaries.pkl
     Generate plots and metrics under outputs/1761139151/eval_analysis/
 
-for (LEARNING EVALUATION)
-    python -m testing.evaluation --run_dir outputs/1761139151 --learning
-
-    Analyze training logs under outputs/1761139151/
-    Save results to outputs/1761139151/learning_analysis/
 
 Inputs required are:
 1) episodes.pkl (which is episode_summaries.pkl)
@@ -33,7 +28,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from collections import OrderedDict
-from testing.learning_eval import analyze_learning
 from testing.features_eval import (
     load_episodes,
     compute_basic_metrics,
