@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # launcher.py
 
-    """
-    # activate environment
+"""
+# activate environment
 source ~/miniconda/etc/profile.d/conda.sh
 conda activate rice_env
 
 # run the launcher
 python ~/climate_repo_rice/launcher.py &
-    
-    """
+
+"""
 import subprocess
 import sys
 import time
