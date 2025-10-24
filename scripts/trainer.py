@@ -127,25 +127,26 @@ os.makedirs(RAY_TMP, exist_ok=True)
 
 
 def initialize_ray():
-    RAY_TMP = os.path.expanduser("~/ray_tmp")
-    os.makedirs(RAY_TMP, exist_ok=True)
+    ray_address = os.environ.get("RAY_ADDRESS")
+    retries = 10  # number of attempts
+    delay = 3  # seconds between attempts
 
-    ray_address = os.environ.get("RAY_ADDRESS", None)
-    if ray_address:
-        print(f"⚡ Connecting to Ray cluster at {ray_address}...")
-        ray.init(address=ray_address, ignore_reinit_error=True)
-        print("✅ Connected to Ray cluster")
-    else:
-        # fallback: local Ray
-        print("⚡ No RAY_ADDRESS set. Starting local Ray...")
-        ray.init(
-            ignore_reinit_error=True,
-            local_mode=False,
-            _temp_dir=RAY_TMP,
-            _plasma_directory=RAY_TMP,
-            object_store_memory=200 * 1024 * 1024,
-        )
-        print("✅ Ray started locally")
+    for i in range(retries):
+        try:
+            print(
+                f"⚡ Attempting to connect to Ray cluster at {ray_address} (try {i+1}/{retries})"
+            )
+            ray.init(address=ray_address, ignore_reinit_error=True)
+            print("✅ Connected to Ray cluster")
+            return
+        except ConnectionError as e:
+            print(f"⚠️ Ray not ready yet: {e}")
+            time.sleep(delay)
+
+    # If all attempts fail, raise an error
+    raise RuntimeError(
+        f"Failed to connect to Ray cluster at {ray_address} after {retries} attempts."
+    )
 
 
 class Callbacks(DefaultCallbacks):

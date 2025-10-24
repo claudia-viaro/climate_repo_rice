@@ -41,9 +41,8 @@ mkdir -p $RAY_TMPDIR
 echo "🗂️ Using Ray temp directory: $RAY_TMPDIR"
 
 # -------------------------
-# Start Ray head node
+# Start Ray head node and get IP
 # -------------------------
-# Capture the IP of the head node
 HEAD_IP=$(ray start --head --temp-dir=$RAY_TMPDIR --object-store-memory 1000000000 | grep "Local node IP" | awk '{print $NF}')
 if [ -z "$HEAD_IP" ]; then
     echo "❌ Failed to start Ray head node"
@@ -51,7 +50,7 @@ if [ -z "$HEAD_IP" ]; then
 fi
 echo "✅ Ray head node started at $HEAD_IP:6379"
 
-# Export the address so Python can connect
+# Export address for Python
 export RAY_ADDRESS="$HEAD_IP:6379"
 
 # -------------------------
@@ -67,23 +66,6 @@ echo "   Monitor progress with:"
 echo "      tail -f $LOGFILE"
 
 # -------------------------
-# Run trainer detached with logging
+# Optional: deactivate environment
 # -------------------------
-LOGFILE=~/climate_repo_rice/run_$(date +%Y%m%d_%H%M%S).log
-echo "🪵 Logging to $LOGFILE"
-nohup python scripts/trainer.py > "$LOGFILE" 2>&1 &
-TRAIN_PID=$!
-echo "🚀 Training started with PID $TRAIN_PID"
-echo "   You can safely close the SSH session."
-echo "   Monitor progress with:"
-echo "      tail -f $LOGFILE"
-
-# -------------------------
-# Optional: wait for training
-# -------------------------
-# wait $TRAIN_PID
-
-# -------------------------
-# Deactivate environment
-# -------------------------
-conda deactivate
+# conda deactivate
