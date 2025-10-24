@@ -11,7 +11,7 @@
 # -------------------------
 # Move to project directory
 # -------------------------
-cd ~/climate_repo_rice || { echo "Cannot enter project dir"; exit 1; }
+cd ~/climate_repo_rice || { echo "❌ Cannot enter project dir"; exit 1; }
 
 # -------------------------
 # Check Git repo
@@ -31,37 +31,52 @@ fi
 # Activate Python environment
 # -------------------------
 source ~/miniconda/etc/profile.d/conda.sh
-conda activate rice_env || { echo "Failed to activate conda environment"; exit 1; }
+conda activate rice_env || { echo "❌ Failed to activate conda environment"; exit 1; }
 
 # -------------------------
-# Stop any old Ray session
+# Stop any existing Ray sessions
 # -------------------------
-if command -v ray &> /dev/null; then
-    echo "🛑 Stopping any existing Ray sessions..."
-    ray stop || true
+echo "🛑 Stopping any existing Ray sessions..."
+if command -v ray &>/dev/null; then
+    ray stop --force &>/dev/null || echo "⚠️ No active Ray processes found"
+else
+    echo "⚠️ Ray command not found, skipping stop."
 fi
 
 # -------------------------
-# Clean Ray temp directory
+# Clean old Ray temp files
 # -------------------------
 export RAY_TMPDIR=$HOME/ray_tmp
-echo "🗑️ Cleaning old Ray temp files..."
-rm -rf $RAY_TMPDIR/*
-mkdir -p $RAY_TMPDIR
+mkdir -p "$RAY_TMPDIR"
 echo "🗂️ Ray temp directory: $RAY_TMPDIR"
+rm -rf "$RAY_TMPDIR"/*
 
 # -------------------------
 # Start Ray head node
 # -------------------------
 echo "⚡ Starting a fresh local Ray head node..."
-ray start --head --port=6379 --temp-dir=$RAY_TMPDIR || { echo "Failed to start Ray"; exit 1; }
+ray start --head --port=6379 &>/dev/null || { echo "❌ Failed to start Ray"; exit 1; }
+
+# Optional: Wait for Ray to be ready
+echo "⏳ Waiting for Ray to initialize..."
+timeout=30  # seconds
+elapsed=0
+while ! ray status &>/dev/null; do
+    sleep 1
+    elapsed=$((elapsed + 1))
+    if [ $elapsed -ge $timeout ]; then
+        echo "⚠️ Ray did not start within $timeout seconds. Proceeding anyway."
+        break
+    fi
+done
+echo "✅ Ray runtime ready"
 
 # -------------------------
-# Run trainer in background with logging
+# Launch trainer in background
 # -------------------------
 LOGFILE=~/climate_repo_rice/run_$(date +%Y%m%d_%H%M%S).log
 echo "🪵 Logging to $LOGFILE"
-nohup python -u scripts/trainer.py > "$LOGFILE" 2>&1 &
+nohup python scripts/trainer.py > "$LOGFILE" 2>&1 &
 TRAIN_PID=$!
 echo "🚀 Training started with PID $TRAIN_PID"
 echo "   You can safely close the SSH session."
@@ -69,7 +84,7 @@ echo "   Monitor progress with:"
 echo "      tail -f $LOGFILE"
 
 # -------------------------
-# Optional: print Ray status
+# Optional: show Ray cluster info
 # -------------------------
-echo "ℹ️ Ray cluster status:"
-ray status
+echo "ℹ️ Ray cluster status (brief):"
+ray status &>/dev/null && ray status || echo "⚠️ Unable to fetch cluster status"
