@@ -130,19 +130,22 @@ def initialize_ray():
     RAY_TMP = os.path.expanduser("~/ray_tmp")
     os.makedirs(RAY_TMP, exist_ok=True)
 
-    # Try connecting to an existing cluster
+    RAY_ADDRESS = os.environ.get("RAY_ADDRESS", "auto")
+
+    # Try connecting to existing cluster
     try:
-        ray.init(address="auto", ignore_reinit_error=True)
-        print("✅ Connected to existing Ray cluster")
-    except ConnectionError:
-        # No cluster found, start Ray locally
+        # If connecting to a cluster, do NOT pass object_store_memory
+        ray.init(address=RAY_ADDRESS, ignore_reinit_error=True)
+        print(f"✅ Connected to existing Ray cluster at {RAY_ADDRESS}")
+    except (ValueError, ConnectionError):
+        # No cluster found or cannot connect -> start local Ray
         print("⚡ No existing Ray cluster found, starting local Ray...")
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
             _temp_dir=RAY_TMP,
             _plasma_directory=RAY_TMP,
-            object_store_memory=200 * 1024 * 1024,
+            object_store_memory=200 * 1024 * 1024,  # only here
         )
         print("✅ Ray started locally on this node")
 
@@ -168,9 +171,6 @@ class Callbacks(DefaultCallbacks):
 
     def set_current_iteration(self, iteration: int):
         self.current_iteration = iteration
-        print(
-            f"[DEBUG] Callback iteration updated to {self.current_iteration} from main loop"
-        )
 
     def on_episode_end(self, *, worker, base_env, policies, episode, **kwargs):
         self.episode_counter += 1
@@ -213,7 +213,6 @@ class Callbacks(DefaultCallbacks):
         if last_rewards:
             for aid, r in last_rewards.items():
                 self.reward_hist_full.setdefault(aid, []).append(r)
-                print(f"  {aid}: {r}")
                 per_agent_entries.append(
                     {
                         "iteration": iteration,
@@ -245,7 +244,6 @@ class Callbacks(DefaultCallbacks):
             recent_mean = (
                 np.mean(hist[-window:]) if len(hist) >= window else np.mean(hist)
             )
-            print(f"  Agent {aid}: mean_reward_last{window}iters={recent_mean:.3f}")
 
         # --- Save to JSONL ---
         if self.save_policy_enabled:
@@ -1203,7 +1201,7 @@ if __name__ == "__main__":
     (Path(save_dir) / ".rllib").touch(exist_ok=False)
 
     callback_instance = trainer.workers.local_worker().callbacks
-    print(f"Number of policies: {len(trainer.workers.local_worker().policy_map)}")
+    # print(f"Number of policies: {len(trainer.workers.local_worker().policy_map)}")
 
     env_obj = trainer.workers.local_worker().env.env
 
@@ -1223,6 +1221,7 @@ if __name__ == "__main__":
     # Training loop
     # -------------------------
     for iteration in tqdm(range(num_iters), disable=True):
+        iter_start = time.time()
         if hasattr(callback_instance, "set_current_iteration"):
             callback_instance.set_current_iteration(iteration + 1)
         print(
@@ -1230,6 +1229,11 @@ if __name__ == "__main__":
             flush=True,
         )
         result = trainer.train()
+
+        iter_end = time.time()  # ⬅️ end timer
+        iter_duration = iter_end - iter_start
+        print(f"[TIMING] Iteration {iteration+1} took {iter_duration:.2f} seconds")
+
         # -------------------------
         # Debug: check env steps sampled
         # -------------------------
