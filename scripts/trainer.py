@@ -127,20 +127,36 @@ os.makedirs(RAY_TMP, exist_ok=True)
 
 
 def initialize_ray():
-    try:
-        # Try to connect to an existing cluster
+    """
+    Initialize Ray for local or cluster execution.
+
+    - If running in the cluster conda environment (`rice_env`), connects to existing cluster.
+    - Otherwise, starts a local Ray instance with a safe temp directory and memory limit.
+    """
+    # Safe temp directory for Ray (for local mode)
+    RAY_TMP = os.path.expanduser("~/ray_tmp")
+    os.makedirs(RAY_TMP, exist_ok=True)
+
+    # Detect current conda environment
+    conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
+    print(f"🐍 Detected conda environment: {conda_env}")
+
+    if conda_env == "rice_env":
+        # Assume cluster environment: connect to existing cluster
+        print("🔗 Connecting to existing Ray cluster...")
         ray.init(address="auto", ignore_reinit_error=True)
-        print("✅ Connected to existing Ray cluster.")
-    except (ConnectionError, ValueError):
-        # No cluster found → start a local Ray instance
+    else:
+        # Local environment: start Ray locally
+        print("🖥️ Starting local Ray instance...")
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
             _temp_dir=RAY_TMP,
-            _plasma_directory=RAY_TMP,
-            object_store_memory=200 * 1024 * 1024,
+            _plasma_directory=RAY_TMP,  # avoid /dev/shm issues
+            object_store_memory=200 * 1024 * 1024,  # limit memory
         )
-        print("✅ Local Ray cluster started with custom temp directory:", RAY_TMP)
+
+    print("✅ Ray initialized successfully")
 
 
 class Callbacks(DefaultCallbacks):
