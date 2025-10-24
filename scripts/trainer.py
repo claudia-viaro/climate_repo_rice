@@ -130,24 +130,25 @@ def initialize_ray():
     RAY_TMP = os.path.expanduser("~/ray_tmp")
     os.makedirs(RAY_TMP, exist_ok=True)
 
-    RAY_ADDRESS = os.environ.get("RAY_ADDRESS", "auto")
-
-    # Try connecting to existing cluster
-    try:
-        # If connecting to a cluster, do NOT pass object_store_memory
-        ray.init(address=RAY_ADDRESS, ignore_reinit_error=True)
-        print(f"✅ Connected to existing Ray cluster at {RAY_ADDRESS}")
-    except (ValueError, ConnectionError):
-        # No cluster found or cannot connect -> start local Ray
-        print("⚡ No existing Ray cluster found, starting local Ray...")
+    # Detect if running on cluster (set an env variable on cluster) OR by hostname
+    on_cluster = os.environ.get("CLUSTER_ENV", "0") == "1"
+    if on_cluster:
+        # Connect to the existing cluster
+        ray_address = os.environ.get("RAY_ADDRESS", "auto")
+        print(f"⚡ Running on cluster. Connecting to Ray at {ray_address}...")
+        ray.init(address=ray_address, ignore_reinit_error=True)
+        print("✅ Connected to Ray cluster")
+    else:
+        # Local run
+        print("⚡ Running locally. Starting Ray...")
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
             _temp_dir=RAY_TMP,
             _plasma_directory=RAY_TMP,
-            object_store_memory=200 * 1024 * 1024,  # only here
+            object_store_memory=200 * 1024 * 1024,
         )
-        print("✅ Ray started locally on this node")
+        print("✅ Ray started locally")
 
 
 class Callbacks(DefaultCallbacks):
