@@ -1,55 +1,57 @@
 #!/usr/bin/env python3
+# launcher.py
+
+    """
+    # activate environment
+source ~/miniconda/etc/profile.d/conda.sh
+conda activate rice_env
+
+# run the launcher
+python ~/climate_repo_rice/launcher.py &
+    
+    """
 import subprocess
-import os
-import datetime
-import signal
 import sys
+import time
+from pathlib import Path
 
-HOME = os.path.expanduser("~")
-PROJECT_DIR = os.path.join(HOME, "climate_repo_rice")
-RAY_TMPDIR = os.path.join(HOME, "ray_tmp")
+# -------------------------------
+# Paths
+# -------------------------------
+project_dir = Path.home() / "climate_repo_rice"
+logfile = project_dir / f"run_{time.strftime('%Y%m%d_%H%M%S')}.log"
 
-# Ensure directories exist
-os.makedirs(RAY_TMPDIR, exist_ok=True)
+# -------------------------------
+# Command to run
+# -------------------------------
+cmd = [sys.executable, "-u", str(project_dir / "scripts/trainer.py")]
 
-# ----------------------------
-# Stop existing Ray sessions
-# ----------------------------
-subprocess.run("ray stop || true", shell=True)
-subprocess.run("killall -9 ray || true", shell=True)
+print(f"🚀 Starting trainer with logging to {logfile}")
+print("   You can safely disconnect. Use `tail -f {}` to monitor.".format(logfile))
 
-# ----------------------------
-# Clean Ray temp files
-# ----------------------------
-for root, dirs, files in os.walk(RAY_TMPDIR):
-    for name in files:
-        try:
-            os.remove(os.path.join(root, name))
-        except Exception:
-            pass
-    for name in dirs:
-        try:
-            os.rmdir(os.path.join(root, name))
-        except Exception:
-            pass
+# -------------------------------
+# Open log file for writing
+# -------------------------------
+with open(logfile, "w") as log:
+    # Use subprocess.Popen to run trainer in background
+    # - stdout/stderr go to log
+    # - unbuffered output ensures live logging
+    process = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
 
-# ----------------------------
-# Setup logging
-# ----------------------------
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-logfile = os.path.join(PROJECT_DIR, f"run_{timestamp}.log")
-print(f"🪵 Logging to {logfile}")
+print(f"Trainer PID: {process.pid}")
 
-# ----------------------------
-# Launch trainer
-# ----------------------------
-with open(logfile, "a") as logf:
-    process = subprocess.Popen(
-        ["python", "-u", os.path.join(PROJECT_DIR, "scripts/trainer.py")],
-        stdout=logf,
-        stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,  # ensure it survives SSH disconnect
-    )
-    print(f"🚀 Trainer started with PID {process.pid}")
-    print("   You can safely disconnect from SSH.")
-    print(f"   Monitor progress with: tail -f {logfile}")
+# -------------------------------
+# Optional: wait for process (keeps launcher running)
+# -------------------------------
+try:
+    while True:
+        retcode = process.poll()
+        if retcode is not None:
+            print(f"Trainer finished with exit code {retcode}")
+            break
+        time.sleep(10)
+except KeyboardInterrupt:
+    print("Stopping trainer...")
+    process.terminate()
+    process.wait()
+    print("Trainer terminated")
