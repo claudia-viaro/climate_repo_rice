@@ -77,7 +77,6 @@ from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from typing import Dict
 import functools
 import ray
-from ray.exceptions import RayConnectionError
 from ray.tune.logger import NoopLogger
 from ray.rllib.evaluation.rollout_worker import RolloutWorker
 from ray.rllib.env.multi_agent_env import MultiAgentEnv
@@ -129,9 +128,11 @@ os.makedirs(RAY_TMP, exist_ok=True)
 
 def initialize_ray():
     try:
+        # try to connect to an existing cluster
         ray.init(address="auto", ignore_reinit_error=True)
         print("✅ Connected to existing Ray cluster.")
-    except (RayConnectionError, ValueError):
+    except ConnectionError:
+        # fallback: start a local Ray instance
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,

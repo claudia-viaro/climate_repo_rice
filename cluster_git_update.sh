@@ -4,7 +4,7 @@
 # ssh cluster.lip6.fr
 # enter the password twice 
 # cd ~/climate_repo_rice
-# chmod +x run_cluster.sh (actually to be done once only)
+# chmod +x cluster_git_update.sh (actually to be done once only)
 # ./cluster_git_update.sh
 # =====================================================
 
