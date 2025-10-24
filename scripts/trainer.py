@@ -128,11 +128,11 @@ os.makedirs(RAY_TMP, exist_ok=True)
 
 def initialize_ray():
     try:
-        # try to connect to an existing cluster
+        # Try to connect to an existing cluster
         ray.init(address="auto", ignore_reinit_error=True)
         print("✅ Connected to existing Ray cluster.")
-    except ConnectionError:
-        # fallback: start a local Ray instance
+    except (ConnectionError, ValueError):
+        # No cluster found → start a local Ray instance
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
