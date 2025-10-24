@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # =====================================================
-# update_repo.sh — Sync or clone your project on cluster
+# ssh cluster.lip6.fr
+# enter the password twice 
+# cd ~/climate_repo_rice
+# chmod +x run_cluster.sh (actually to be done once only)
+# ./cluster_git_update.sh
 # =====================================================
 
 # Go to home directory
