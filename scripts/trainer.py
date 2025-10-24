@@ -130,17 +130,14 @@ def initialize_ray():
     RAY_TMP = os.path.expanduser("~/ray_tmp")
     os.makedirs(RAY_TMP, exist_ok=True)
 
-    # Detect if running on cluster (set an env variable on cluster) OR by hostname
-    on_cluster = os.environ.get("CLUSTER_ENV", "0") == "1"
-    if on_cluster:
-        # Connect to the existing cluster
-        ray_address = os.environ.get("RAY_ADDRESS", "auto")
-        print(f"⚡ Running on cluster. Connecting to Ray at {ray_address}...")
+    ray_address = os.environ.get("RAY_ADDRESS", None)
+    if ray_address:
+        print(f"⚡ Connecting to Ray cluster at {ray_address}...")
         ray.init(address=ray_address, ignore_reinit_error=True)
         print("✅ Connected to Ray cluster")
     else:
-        # Local run
-        print("⚡ Running locally. Starting Ray...")
+        # fallback: local Ray
+        print("⚡ No RAY_ADDRESS set. Starting local Ray...")
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
