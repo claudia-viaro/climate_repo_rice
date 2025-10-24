@@ -34,24 +34,11 @@ source ~/miniconda/etc/profile.d/conda.sh
 conda activate rice_env || { echo "Failed to activate conda environment"; exit 1; }
 
 # -------------------------
-# Set up Ray temp directory
+# Set up Ray temp directory (optional)
 # -------------------------
 export RAY_TMPDIR=$HOME/ray_tmp
 mkdir -p $RAY_TMPDIR
-echo "🗂️ Using Ray temp directory: $RAY_TMPDIR"
-
-# -------------------------
-# Start Ray head node and get IP
-# -------------------------
-HEAD_IP=$(ray start --head --temp-dir=$RAY_TMPDIR --object-store-memory 1000000000 | grep "Local node IP" | awk '{print $NF}')
-if [ -z "$HEAD_IP" ]; then
-    echo "❌ Failed to start Ray head node"
-    exit 1
-fi
-echo "✅ Ray head node started at $HEAD_IP:6379"
-
-# Export address for Python
-export RAY_ADDRESS="$HEAD_IP:6379"
+echo "🗂️ Ray temp directory: $RAY_TMPDIR"
 
 # -------------------------
 # Run trainer detached with logging
@@ -64,8 +51,3 @@ echo "🚀 Training started with PID $TRAIN_PID"
 echo "   You can safely close the SSH session."
 echo "   Monitor progress with:"
 echo "      tail -f $LOGFILE"
-
-# -------------------------
-# Optional: deactivate environment
-# -------------------------
-# conda deactivate
