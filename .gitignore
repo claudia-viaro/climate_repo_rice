@@ -15,12 +15,12 @@ venv*/
 outputs
 
 #sh files
-auto_push.sh
-cluster_git_update.sh
+
 
 # OS
 .DS_Store
 Thumbs.db
+outputs/
 outputs/
 outputs/
 outputs/
