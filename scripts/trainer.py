@@ -127,22 +127,40 @@ os.makedirs(RAY_TMP, exist_ok=True)
 
 
 def initialize_ray():
+    """
+    Initialize Ray either locally or connect to cluster depending on environment.
+    Waits until the cluster is ready.
+    """
+    # Detect environment by conda env name
+    conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
     RAY_TMP = os.path.expanduser("~/ray_tmp")
     os.makedirs(RAY_TMP, exist_ok=True)
 
-    conda_env = os.environ.get("CONDA_DEFAULT_ENV", "")
-    print(f"🐍 Detected conda environment: {conda_env}")
-
     if conda_env == "rice_env":
-        # Cluster mode: specify the address of the head node
+        # Cluster environment
         RAY_ADDRESS = os.environ.get(
-            "RAY_ADDRESS", "132.227.198.206:6379"
-        )  # <-- set to your cluster head
+            "RAY_ADDRESS", "auto"
+        )  # or set your cluster IP:port
+        print(f"🐍 Detected conda environment: {conda_env}")
         print(f"🔗 Connecting to Ray cluster at {RAY_ADDRESS} ...")
-        ray.init(address=RAY_ADDRESS, ignore_reinit_error=True)
+
+        start_time = time.time()
+        timeout = 30  # seconds
+        while True:
+            try:
+                ray.init(address=RAY_ADDRESS, ignore_reinit_error=True)
+                print(f"✅ Connected to Ray at {RAY_ADDRESS}")
+                break
+            except (ConnectionError, RuntimeError):
+                if time.time() - start_time > timeout:
+                    raise TimeoutError(
+                        f"Could not connect to Ray cluster at {RAY_ADDRESS} after {timeout}s"
+                    )
+                print("⏳ Waiting for Ray cluster to be ready...")
+                time.sleep(2)
     else:
-        # Local mode: start Ray locally
-        print("🖥️ Starting local Ray instance...")
+        # Local run
+        print("🐍 Detected local environment, starting Ray locally...")
         ray.init(
             ignore_reinit_error=True,
             local_mode=False,
@@ -150,8 +168,7 @@ def initialize_ray():
             _plasma_directory=RAY_TMP,
             object_store_memory=200 * 1024 * 1024,
         )
-
-    print("✅ Ray initialized successfully")
+        print("✅ Ray initialized successfully locally with temp dir:", RAY_TMP)
 
 
 class Callbacks(DefaultCallbacks):
