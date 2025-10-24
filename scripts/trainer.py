@@ -1152,11 +1152,19 @@ if __name__ == "__main__":
     # -------------------------
     # Initialize Ray
     # -------------------------
+    # Safe Ray temp & object store paths
+    RAY_TMP = os.path.expanduser("~/ray_tmp")
+    os.makedirs(RAY_TMP, exist_ok=True)
+
     ray.init(
         ignore_reinit_error=True,
-        _temp_dir=os.path.expanduser("~/ray_tmp"),
-        local_mode=False,  # set to True if you want fully local (debug)
+        local_mode=False,
+        _temp_dir=RAY_TMP,
+        _plasma_directory=RAY_TMP,  # avoid /dev/shm issues
+        object_store_memory=200 * 1024 * 1024,  # limit memory
     )
+    print("✅ Ray initialized successfully with custom temp directory:", RAY_TMP)
+
     set_num_agents(config_yaml)
 
     # -------------------------
