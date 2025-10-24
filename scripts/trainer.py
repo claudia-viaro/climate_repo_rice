@@ -25,8 +25,8 @@ import warnings
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
-
 import psutil
+from datetime import datetime
 import time
 import numpy as np
 import yaml
@@ -75,27 +75,27 @@ from tqdm import tqdm
 import datetime
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from typing import Dict
-from ray.rllib.evaluation.rollout_worker import RolloutWorker
-from ray.rllib.env.base_env import BaseEnv
-from ray.rllib.policy.policy import Policy
 import functools
 import ray
-import torch
-import gymnasium as gym
-from gymnasium.spaces import Box, Dict
+from ray.exceptions import RayConnectionError
+from ray.tune.logger import NoopLogger
+from ray.rllib.evaluation.rollout_worker import RolloutWorker
+from ray.rllib.env.multi_agent_env import MultiAgentEnv
+from ray.rllib.env.base_env import BaseEnv
+from ray.rllib.policy.policy import Policy
 from ray.rllib.algorithms.a2c import A2CConfig
 from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.algorithms.sac import SACConfig
+import torch
+import gymnasium as gym
+from gymnasium.spaces import Box, Dict
+
 
 ALGOS = {
     "A2C": A2CConfig,
     "PPO": PPOConfig,
     "SAC": SACConfig,
 }
-
-from ray.rllib.env.multi_agent_env import MultiAgentEnv
-from datetime import datetime
-from ray.tune.logger import NoopLogger
 
 print = functools.partial(print, flush=True)
 logging.getLogger().setLevel(logging.WARNING)
@@ -119,6 +119,27 @@ SCENARIO_MAPPING = {
     "TradeAwarePartners": TradeAwarePartners,
     "NegoReward": NegoReward,
 }
+
+# -------------------------
+# Function to initialize Ray
+# -------------------------
+RAY_TMP = os.path.expanduser("~/ray_tmp")
+os.makedirs(RAY_TMP, exist_ok=True)
+
+
+def initialize_ray():
+    try:
+        ray.init(address="auto", ignore_reinit_error=True)
+        print("✅ Connected to existing Ray cluster.")
+    except (RayConnectionError, ValueError):
+        ray.init(
+            ignore_reinit_error=True,
+            local_mode=False,
+            _temp_dir=RAY_TMP,
+            _plasma_directory=RAY_TMP,
+            object_store_memory=200 * 1024 * 1024,
+        )
+        print("✅ Local Ray cluster started with custom temp directory:", RAY_TMP)
 
 
 class Callbacks(DefaultCallbacks):
@@ -1152,18 +1173,8 @@ if __name__ == "__main__":
     # -------------------------
     # Initialize Ray
     # -------------------------
-    # Safe Ray temp & object store paths
-    RAY_TMP = os.path.expanduser("~/ray_tmp")
-    os.makedirs(RAY_TMP, exist_ok=True)
-
-    ray.init(
-        ignore_reinit_error=True,
-        local_mode=False,
-        _temp_dir=RAY_TMP,
-        _plasma_directory=RAY_TMP,  # avoid /dev/shm issues
-        object_store_memory=200 * 1024 * 1024,  # limit memory
-    )
-    print("✅ Ray initialized successfully with custom temp directory:", RAY_TMP)
+    # Initialize Ray safely
+    initialize_ray()
 
     set_num_agents(config_yaml)
 
