@@ -1,3 +1,0 @@
-{"iteration": 1, "policy_id": "agent_0", "allreduce_latency": 0.0, "grad_gnorm": 40.0, "cur_lr": 0.0005, "entropy_coeff": 0.5, "policy_entropy": 38765.84375, "policy_loss": -93738.7421875, "vf_loss": 6572.59033203125, "temp_rise_rl": 2.8610262870788574}
-{"iteration": 1, "policy_id": "agent_1", "allreduce_latency": 0.0, "grad_gnorm": 40.0, "cur_lr": 0.0005, "entropy_coeff": 0.5, "policy_entropy": 38792.07421875, "policy_loss": -13856.7431640625, "vf_loss": 193.33489990234375, "temp_rise_rl": 2.8610262870788574}
-{"iteration": 1, "policy_id": "agent_2", "allreduce_latency": 0.0, "grad_gnorm": 40.0, "cur_lr": 0.0005, "entropy_coeff": 0.5, "policy_entropy": 38785.0546875, "policy_loss": -12022.9462890625, "vf_loss": 139.15919494628906, "temp_rise_rl": 2.8610262870788574}

@@ -1,3 +1,0 @@
-{"iteration": 1, "policy_id": "agent_0", "policy_loss": -179777.671875, "vf_loss": 28166.677734375, "entropy": null, "kl": null}
-{"iteration": 1, "policy_id": "agent_1", "policy_loss": -19126.294921875, "vf_loss": 344.2175598144531, "entropy": null, "kl": null}
-{"iteration": 1, "policy_id": "agent_2", "policy_loss": -32710.9765625, "vf_loss": 1333.570556640625, "entropy": null, "kl": null}

@@ -1,1 +1,0 @@
-{"iteration": 1, "policy_entropy": 38752.723958333336, "cur_lr": 0.0005, "vf_loss": 2529.166074117025, "temp_rise_rl": 2.511044502258301, "allreduce_latency": 0.0, "grad_gnorm": 40.0, "policy_loss": -37644.10888671875, "entropy_coeff": 0.5}

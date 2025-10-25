@@ -2,6 +2,7 @@
 # launcher.py
 
 """
+to run after updating pull github
 # activate environment
 source ~/miniconda/etc/profile.d/conda.sh
 conda activate rice_env
@@ -9,8 +10,13 @@ conda activate rice_env
 # run the launcher
 python ~/climate_repo_rice/launcher.py &
 
+
+to stop the training if needed
+import subprocessps aux | grep trainer.py   # find PID
+kill <PID>
 """
-import subprocess
+
+
 import sys
 import time
 from pathlib import Path

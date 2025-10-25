@@ -1,3 +1,0 @@
-{"iteration": 1, "cur_lr": 0.0005, "grad_gnorm": 40.0, "allreduce_latency": 0.0, "vf_loss": 1672.968894958496, "temp_rise_rl": 3.123988151550293, "policy_entropy": 38762.153645833336, "policy_loss": -35278.117838541664, "entropy_coeff": 0.5}
-{"iteration": 2, "cur_lr": 0.0005, "grad_gnorm": 40.0, "allreduce_latency": 0.0, "vf_loss": 2488.780563354492, "temp_rise_rl": 2.8857669830322266, "policy_entropy": 38742.494791666664, "policy_loss": -42019.732747395836, "entropy_coeff": 0.49952}
-{"iteration": 3, "cur_lr": 0.0005, "grad_gnorm": 40.0, "allreduce_latency": 0.0, "vf_loss": 2573.161652882894, "temp_rise_rl": 2.5329861640930176, "policy_entropy": 38751.415364583336, "policy_loss": -42937.821940104164, "entropy_coeff": 0.49904}

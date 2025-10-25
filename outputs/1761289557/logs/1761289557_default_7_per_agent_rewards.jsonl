@@ -1,0 +1,14 @@
+{"iteration": 0, "agent_id": "region_0", "episode_index": 1, "reward": -0.06247448921203613}
+{"iteration": 0, "agent_id": "region_1", "episode_index": 1, "reward": -0.14870715141296387}
+{"iteration": 0, "agent_id": "region_2", "episode_index": 1, "reward": -0.014881014823913574}
+{"iteration": 0, "agent_id": "region_3", "episode_index": 1, "reward": -0.05067804455757141}
+{"iteration": 0, "agent_id": "region_4", "episode_index": 1, "reward": -0.03216820955276489}
+{"iteration": 0, "agent_id": "region_5", "episode_index": 1, "reward": -0.42729687690734863}
+{"iteration": 0, "agent_id": "region_6", "episode_index": 1, "reward": -0.404233455657959}
+{"iteration": 1, "agent_id": "region_0", "episode_index": 2, "reward": 0.02412581443786621}
+{"iteration": 1, "agent_id": "region_1", "episode_index": 2, "reward": -0.034130096435546875}
+{"iteration": 1, "agent_id": "region_2", "episode_index": 2, "reward": -0.006535053253173828}
+{"iteration": 1, "agent_id": "region_3", "episode_index": 2, "reward": -0.07013162970542908}
+{"iteration": 1, "agent_id": "region_4", "episode_index": 2, "reward": -0.06139695644378662}
+{"iteration": 1, "agent_id": "region_5", "episode_index": 2, "reward": 0.03719222545623779}
+{"iteration": 1, "agent_id": "region_6", "episode_index": 2, "reward": -0.4233987331390381}
