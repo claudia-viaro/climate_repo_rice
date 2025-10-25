@@ -1,7 +1,7 @@
 #!/bin/bash
 ######################### to be done after training (after running run_cluster.sh)
-#chmod +x push_outputs.sh   # only once
-#./push_outputs.sh
+#chmod +x push_cluster_git.sh   # only once
+#./push_cluster_git.sh
 
 cd ~/climate_repo_rice || { echo "Cannot enter project dir"; exit 1; }
 
