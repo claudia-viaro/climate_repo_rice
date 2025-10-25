@@ -1,6 +1,6 @@
 ######################### to be done after training (after running run_cluster.sh)
-# chmod +x pull_git_cluster_git.sh   # only once
-# ./pull_git_cluster_git.sh
+# chmod +x pull_git_cluster.sh   # only once
+# ./pull_git_cluster.sh
 
 cd ~/climate_repo_rice || { echo "❌ Cannot enter project dir"; exit 1; }
 

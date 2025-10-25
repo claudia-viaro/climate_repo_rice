@@ -16,6 +16,7 @@
 
 
 # Go to your repo 
+
 cd ~/RICE-N-exp || exit 
 echo "outputs/" >> .gitignore # won't hurt if already there 
 
