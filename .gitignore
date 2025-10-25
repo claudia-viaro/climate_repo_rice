@@ -16,12 +16,13 @@ outputs
 
 #sh files
 # auto_push.sh
-push_local_git.sh
-push_cluster_git.sh
+# push_local_git.sh
+# push_cluster_git.sh
 
 # OS
 .DS_Store
 Thumbs.db
+outputs/
 outputs/
 outputs/
 outputs/
