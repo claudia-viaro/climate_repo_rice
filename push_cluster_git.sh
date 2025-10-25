@@ -24,7 +24,7 @@ echo "Latest run folder: $latest_output"
 # -------------------------
 # Add and commit only the latest run folder
 # -------------------------
-git add "$latest_output"
+git add -f "$latest_output"
 git commit -m "Add latest cluster run: $(basename $latest_output) - $(date '+%Y-%m-%d %H:%M:%S')"
 git push origin main
 

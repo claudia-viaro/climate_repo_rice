@@ -1,13 +1,19 @@
 #!/bin/bash
 #########################
-# pull_one_run.sh
-# Usage: ./pull_one_run.sh outputs/1761304985
+#chmod +x pull_git_local.sh   # only once
+
+# pull_git_local.sh
+# Usage: ./pull_git_local.sh outputs/1761304985
 # from github to local machine, move the output folder
 #########################
 
 cd ~/climate_repo_rice || { echo "Cannot enter project dir"; exit 1; }
 
 run_folder="$1"
+if ! git ls-tree -r origin/main --name-only | grep -q "^$run_folder/"; then
+    echo "❌ $run_folder does not exist on GitHub."
+    exit 1
+fi
 
 if [ -z "$run_folder" ]; then
     echo "Usage: $0 <outputs/subfolder>"
